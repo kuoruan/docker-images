@@ -1,0 +1,14 @@
+# Per-image metadata consumed by .github/workflows/build.yml.
+# Edit this file and re-run the "Build Docker Image" workflow to rebuild.
+# version is always a concrete, pinned tag (e.g. 2.11.4); there is no floating mode.
+
+name: caddy
+version: "2.11.4"
+description: Custom Caddy image built via xcaddy.
+platforms:
+  - linux/amd64
+  - linux/arm64
+
+update:
+  github: caddyserver/caddy   # latest release tag is fetched from this repo
+  tag_prefix: v               # strip this prefix from the tag to get the version
