@@ -1,9 +1,9 @@
 name: Update Versions
 
-# Bumps each image.yml's `version` to the latest upstream release, when the
-# image declares an `update` source. The bump reads with yq and writes with
-# sed (only the `version:` line), so blank lines and comments are preserved.
-# Builds stay manual; this only updates the version number.
+# Bumps each image.yml's `version` to the latest upstream release (PyYAML
+# round-trip), when the image declares an `update` source. After committing,
+# each bumped image is tagged as <image>/v<version> and pushed; that tag
+# triggers the Build Image workflow (its push.tags trigger).
 
 on:
   schedule:
@@ -21,15 +21,29 @@ jobs:
     if: github.repository_owner == 'kuoruan' # only run on the upstream owner's repos, not forks
     name: Bump Versions
     runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.bump.outputs.changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up Python
+        uses: ./.github/actions/setup-python
+
       - name: Bump versions
-        run: ./scripts/update-versions.sh
+        id: bump
+        run: python3 scripts/update-versions.py
 
       - name: Commit changed versions
+        id: commit
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: bump image versions to latest upstream"
           file_pattern: images/
+
+      # Tag each bumped image as <image>/v<version>; pushing the tag triggers
+      # the Build Image workflow via its push.tags trigger.
+      - name: Tag bumped images
+        if: steps.commit.outputs.changes_detected == 'true'
+        run: python3 scripts/tag-bumped.py
+

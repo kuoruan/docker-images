@@ -7,7 +7,7 @@ for the build recipe.
 ## Tags
 
 - `ghcr.io/<owner>/caddy:<version>` — e.g. `2.11.4`
-- `ghcr.io/<owner>/caddy:latest` — most recent build
+- `ghcr.io/<owner>/caddy:latest` — most recent build (may differ from the newest released version)
 - `ghcr.io/<owner>/caddy:sha-<short>` — the 7-char short SHA of the commit that triggered the build (re-runs of the same commit overwrite this tag)
 
 Every build is pinned to a concrete version (from [`image.yml`](./image.yml) or the workflow `version` input). It uses `caddy:<version>-builder` / `caddy:<version>-alpine` base images and pushes `<version>` + `latest` + `sha-<short>`.

@@ -26,5 +26,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Set up Python
+        uses: ./.github/actions/setup-python
+
       - name: Compare workflow choice options with images/*/
-        run: ./scripts/sync-check.sh
+        run: python3 scripts/sync-check.py

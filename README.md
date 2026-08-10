@@ -22,7 +22,9 @@ Run workflow**, pick an image from the dropdown, optionally pass a concrete
 and run. The build pushes to `ghcr.io/<owner>/<image>`.
 
 Every build is pinned to a concrete version and pushes `<version>`, `latest`,
-and `sha-<short>` tags. Reproducible. The workflow passes a single `VERSION`
+and `sha-<short>` tags. `latest` always points at the most recent build, which
+may differ from the newest released version (for example, when an older
+version is rebuilt manually). Reproducible. The workflow passes a single `VERSION`
 build-arg; each image's `Dockerfile` uses it to assemble its own `FROM` lines,
 so the workflow stays image-agnostic (no per-image base-tag assumptions).
 

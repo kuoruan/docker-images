@@ -4,6 +4,13 @@
 *.tmp
 *.bak
 
+# Temporary bump-changes file written by scripts/update-versions.py
+/.changes
+
+# Python bytecode cache
+__pycache__/
+*.pyc
+
 # Editor / IDE
 .idea/
 .vscode/

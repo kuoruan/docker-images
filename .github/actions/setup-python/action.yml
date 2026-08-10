@@ -1,0 +1,16 @@
+name: Set up Python
+description: Install Python 3.13 with pip caching and project dependencies.
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.13'
+        cache: 'pip'
+        cache-dependency-path: requirements.txt
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install -r requirements.txt
