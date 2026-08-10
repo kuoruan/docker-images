@@ -13,11 +13,6 @@ on:
         description: "Version to build (concrete tag, e.g. 1.0.0). Leave empty to use image.yml."
         required: false
         type: string
-  # A push that touches this workflow file itself re-registers the workflow
-  # with GitHub (the job is skipped unless manually dispatched). See README.
-  push:
-    paths:
-      - .github/workflows/build.yml
 
 permissions:
   contents: read
@@ -28,7 +23,6 @@ env:
 
 jobs:
   build:
-    if: github.event_name == 'workflow_dispatch' # skip on push (registration only)
     name: Build ${{ inputs.image }}
     runs-on: ubuntu-latest
     steps:
