@@ -28,7 +28,7 @@ env:
 
 jobs:
   build:
-    name: Build ${{ steps.vars.outputs.image }}
+    name: Build ${{ inputs.image || github.ref_name }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
