@@ -1,0 +1,30 @@
+name: sync-check
+
+# Fails if the `image` choice options in build.yml drift from the images/*/
+# directories. Runs automatically on changes that could cause drift, and can
+# be triggered manually.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'images/**'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/sync-check.yml'
+  pull_request:
+    paths:
+      - 'images/**'
+      - '.github/workflows/build.yml'
+      - '.github/workflows/sync-check.yml'
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: choice options match images/*/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Compare workflow choice options with images/*/
+        run: ./scripts/sync-check.sh

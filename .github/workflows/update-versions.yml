@@ -1,0 +1,35 @@
+name: update-versions
+
+# Bumps each image.yml's `version` to the latest upstream release, when the
+# image declares an `update` source. The bump reads with yq and writes with
+# sed (only the `version:` line), so blank lines and comments are preserved.
+# Builds stay manual; this only updates the version number.
+
+on:
+  schedule:
+    - cron: '37 4 * * 1' # every Monday 04:37 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  update:
+    if: github.repository_owner == 'kuoruan' # only run on the upstream owner's repos, not forks
+    name: bump image.yml versions to latest upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Bump versions
+        run: ./scripts/update-versions.sh
+
+      - name: Commit changed versions
+        uses: stefanzweifel/git-auto-commit-action@v7
+        with:
+          commit_message: "chore: bump image versions to latest upstream"
+          file_pattern: images/

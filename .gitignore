@@ -1,0 +1,14 @@
+# Common files that should not be committed
+.DS_Store
+*.log
+*.tmp
+*.bak
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+
+# Local build artifacts
+caddy
+caddy-build/
