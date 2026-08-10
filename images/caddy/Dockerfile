@@ -19,12 +19,16 @@
 ARG VERSION
 
 FROM --platform=$BUILDPLATFORM caddy:${VERSION}-builder AS builder
+
 ARG TARGETARCH
 ARG GOPROXY=https://proxy.golang.org,direct
+
 ENV CGO_ENABLED=0
+
 # Caddy version comes from the builder image's CADDY_VERSION ENV.
 RUN GOARCH=$TARGETARCH xcaddy build \
       --with github.com/caddy-dns/cloudflare \
+      --with github.com/WeidiDeng/caddy-cloudflare-ip \
       --with github.com/caddy-dns/tencentcloud \
       --with github.com/imgk/caddy-trojan \
       --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
