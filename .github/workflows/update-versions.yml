@@ -1,4 +1,4 @@
-name: update-versions
+name: Update Versions
 
 # Bumps each image.yml's `version` to the latest upstream release, when the
 # image declares an `update` source. The bump reads with yq and writes with
@@ -19,7 +19,7 @@ env:
 jobs:
   update:
     if: github.repository_owner == 'kuoruan' # only run on the upstream owner's repos, not forks
-    name: bump image.yml versions to latest upstream
+    name: Bump Versions
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

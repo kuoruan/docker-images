@@ -1,4 +1,4 @@
-name: sync-check
+name: Sync Check
 
 # Fails if the `image` choice options in build.yml drift from the images/*/
 # directories. Runs automatically on changes that could cause drift, and can
@@ -20,7 +20,7 @@ on:
 
 jobs:
   check:
-    name: choice options match images/*/
+    name: Check Choice Options
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
