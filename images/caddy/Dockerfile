@@ -29,6 +29,7 @@ ENV CGO_ENABLED=0
 RUN GOARCH=$TARGETARCH xcaddy build \
       --with github.com/caddy-dns/cloudflare \
       --with github.com/WeidiDeng/caddy-cloudflare-ip \
+      --with github.com/fvbommel/caddy-combine-ip-ranges \
       --with github.com/caddy-dns/tencentcloud \
       --with github.com/imgk/caddy-trojan \
       --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
