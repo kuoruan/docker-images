@@ -59,11 +59,11 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.vars.outputs.image }}
-          # `release` is false for commit-hash builds, which are unreleased
-          # snapshots and must not take over the `latest` tag.
+          # `tag` is the semver for releases, or a 7-char short hash for
+          # commit builds; `latest` always points at the most recent build.
           tags: |
-            type=raw,value=${{ steps.vars.outputs.version }}
-            type=raw,value=latest,enable=${{ steps.vars.outputs.release == 'true' }}
+            type=raw,value=${{ steps.vars.outputs.tag }}
+            type=raw,value=latest
             type=sha,format=short
 
       - name: Build and push

@@ -14,16 +14,17 @@ Env:
     GITHUB_EVENT_NAME  push | workflow_dispatch
     GITHUB_OUTPUT   step output file
 
-Writes image=, version=, base_version=, platforms=, release= to
+Writes image=, version=, base_version=, platforms=, tag= to
 $GITHUB_OUTPUT. Called by .github/workflows/build.yml.
 
 Version model:
     version      what `xcaddy build` compiles: a semver tag or a full 40-char
                  commit hash (input wins over image.yml).
+    tag          the docker tag for this build: the semver as-is, or the first
+                 7 chars of a commit hash (matching GitHub's short SHA).
     base_version the caddy:<x>-builder/-alpine base image tag; always a semver:
                  follows version when it is a semver, else falls back to
                  image.yml's version (Docker Hub has no <hash>-builder tag).
-    release      true for semver builds (tagged latest), false for hashes.
 """
 
 from __future__ import annotations
@@ -117,9 +118,9 @@ def main() -> int:
         f.write(f"version={version}\n")
         f.write(f"base_version={base_version}\n")
         f.write(f"platforms={platforms}\n")
-        # Commit-hash builds are treated as unreleased; the workflow uses this
-        # to skip the `latest` docker tag for them.
-        f.write(f"release={str(not is_commit).lower()}\n")
+        # Docker tag: short hash (7 chars, like GitHub's short SHA) for commit
+        # builds; the semver itself for releases.
+        f.write(f"tag={version[:7] if is_commit else version}\n")
     return 0
 
 

@@ -4,7 +4,7 @@
 # what Update Versions bumps weekly, and the base-image fallback when a
 # commit-hash build is requested. To build an unreleased fix, leave this file
 # alone and pass the full 40-char commit hash via the workflow's version
-# input instead; hash builds are not tagged `latest`.
+# input instead; that build is tagged with the 7-char short hash.
 
 name: caddy
 version: "2.11.4"
