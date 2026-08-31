@@ -33,6 +33,7 @@ RUN GOARCH=$TARGETARCH xcaddy build \
       --with github.com/caddy-dns/tencentcloud \
       --with github.com/imgk/caddy-trojan \
       --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
+      --with github.com/relvacode/caddy-oidc \
       --output /usr/bin/caddy
 
 FROM caddy:${VERSION}-alpine
