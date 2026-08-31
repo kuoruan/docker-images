@@ -10,7 +10,7 @@ on:
         options:
           - caddy
       version:
-        description: "Version to build (concrete tag, e.g. 1.0.0). Leave empty to use image.yml."
+        description: "Version to build: a semver tag (e.g. 2.11.4) or a full 40-char commit hash. Leave empty to use image.yml."
         required: false
         type: string
   # An image tag of the form <image>/v<version> (created by Update Versions)
@@ -59,9 +59,11 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.vars.outputs.image }}
+          # `release` is false for commit-hash builds, which are unreleased
+          # snapshots and must not take over the `latest` tag.
           tags: |
             type=raw,value=${{ steps.vars.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ steps.vars.outputs.release == 'true' }}
             type=sha,format=short
 
       - name: Build and push
@@ -72,6 +74,7 @@ jobs:
           platforms: ${{ steps.vars.outputs.platforms }}
           build-args: |
             VERSION=${{ steps.vars.outputs.version }}
+            BASE_VERSION=${{ steps.vars.outputs.base_version }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

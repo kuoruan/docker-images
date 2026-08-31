@@ -1,6 +1,10 @@
 # Per-image metadata consumed by .github/workflows/build.yml.
 # Edit this file and re-run the "Build Docker Image" workflow to rebuild.
-# version is always a concrete, pinned tag (e.g. 2.11.4); there is no floating mode.
+# version is the default version and must be a semver tag (e.g. 2.11.4): it is
+# what Update Versions bumps weekly, and the base-image fallback when a
+# commit-hash build is requested. To build an unreleased fix, leave this file
+# alone and pass the full 40-char commit hash via the workflow's version
+# input instead; hash builds are not tagged `latest`.
 
 name: caddy
 version: "2.11.4"

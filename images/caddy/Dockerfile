@@ -2,12 +2,13 @@
 
 # Caddy with custom plugins, built via xcaddy.
 #
-# Version pinning:
-#   VERSION pins both the builder and runtime base images (caddy:<VERSION>-builder
-#   and caddy:<VERSION>-alpine). The builder image also sets CADDY_VERSION ENV,
-#   which pins the Caddy version xcaddy builds. VERSION is passed by the workflow
-#   from image.yml / the version input; it has no default here on purpose so the
-#   version stays a single source of truth.
+# Version model (two args from the workflow):
+#   VERSION      what xcaddy compiles: a semver tag (2.11.4) or a full 40-char
+#                commit hash for unreleased fixes.
+#   BASE_VERSION the caddy:<x>-builder/-alpine base image tag; always a semver.
+#                It follows VERSION when VERSION is a semver, and falls back to
+#                image.yml's version for commit-hash builds (Docker Hub has no
+#                <hash>-builder tag).
 #
 # Multi-arch without QEMU:
 #   The builder stage is pinned to the build platform (--platform=$BUILDPLATFORM)
@@ -17,16 +18,17 @@
 #   the pure-Go build cross-compilable; all included plugins must stay pure-Go.
 
 ARG VERSION
+ARG BASE_VERSION
 
-FROM --platform=$BUILDPLATFORM caddy:${VERSION}-builder AS builder
+FROM --platform=$BUILDPLATFORM caddy:${BASE_VERSION}-builder AS builder
 
 ARG TARGETARCH
+ARG VERSION
 ARG GOPROXY=https://proxy.golang.org,direct
 
 ENV CGO_ENABLED=0
 
-# Caddy version comes from the builder image's CADDY_VERSION ENV.
-RUN GOARCH=$TARGETARCH xcaddy build \
+RUN GOARCH=$TARGETARCH xcaddy build "${VERSION}" \
       --with github.com/caddy-dns/cloudflare \
       --with github.com/WeidiDeng/caddy-cloudflare-ip \
       --with github.com/fvbommel/caddy-combine-ip-ranges \
@@ -36,5 +38,5 @@ RUN GOARCH=$TARGETARCH xcaddy build \
       --with github.com/relvacode/caddy-oidc \
       --output /usr/bin/caddy
 
-FROM caddy:${VERSION}-alpine
+FROM caddy:${BASE_VERSION}-alpine
 COPY --from=builder /usr/bin/caddy /usr/bin/caddy

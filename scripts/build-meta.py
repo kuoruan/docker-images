@@ -14,8 +14,16 @@ Env:
     GITHUB_EVENT_NAME  push | workflow_dispatch
     GITHUB_OUTPUT   step output file
 
-Writes image=, version=, platforms= to $GITHUB_OUTPUT.
-Called by .github/workflows/build.yml.
+Writes image=, version=, base_version=, platforms=, release= to
+$GITHUB_OUTPUT. Called by .github/workflows/build.yml.
+
+Version model:
+    version      what `xcaddy build` compiles: a semver tag or a full 40-char
+                 commit hash (input wins over image.yml).
+    base_version the caddy:<x>-builder/-alpine base image tag; always a semver:
+                 follows version when it is a semver, else falls back to
+                 image.yml's version (Docker Hub has no <hash>-builder tag).
+    release      true for semver builds (tagged latest), false for hashes.
 """
 
 from __future__ import annotations
@@ -28,6 +36,8 @@ from pathlib import Path
 import yaml
 
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$")
+# Full 40-char git commit hash (for building unreleased fixes).
+COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def resolve_from_event() -> tuple[str, str]:
@@ -73,9 +83,28 @@ def main() -> int:
 
     version = version_input or str(img.get("version", ""))
 
-    if not VERSION_RE.match(version):
-        print(f"::error::Version must be a concrete tag such as 2.11.4 (got: {version})", file=sys.stderr)
+    is_commit = bool(COMMIT_RE.match(version))
+    if not is_commit and not VERSION_RE.match(version):
+        print(
+            f"::error::Version must be a concrete tag such as 2.11.4, or a full "
+            f"40-char commit hash (got: {version})",
+            file=sys.stderr,
+        )
         return 1
+
+    # Base image tag: follows a semver version; falls back to image.yml's
+    # version when building a commit hash (Docker Hub has no <hash>-builder tag).
+    if is_commit:
+        base_version = str(img.get("version", ""))
+        if not VERSION_RE.match(base_version):
+            print(
+                f"::error::image.yml version must be a semver tag such as 2.11.4; "
+                f"it is the base-image fallback for commit-hash builds (got: {base_version})",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        base_version = version
 
     platforms = ",".join(img.get("platforms") or [])
 
@@ -86,7 +115,11 @@ def main() -> int:
     with open(github_output, "a") as f:
         f.write(f"image={image}\n")
         f.write(f"version={version}\n")
+        f.write(f"base_version={base_version}\n")
         f.write(f"platforms={platforms}\n")
+        # Commit-hash builds are treated as unreleased; the workflow uses this
+        # to skip the `latest` docker tag for them.
+        f.write(f"release={str(not is_commit).lower()}\n")
     return 0
 
 
