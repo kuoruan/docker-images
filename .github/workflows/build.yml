@@ -10,7 +10,7 @@ on:
         options:
           - caddy
       version:
-        description: "Version to build: a semver tag (e.g. 2.11.4) or a full 40-char commit hash. Leave empty to use image.yml."
+        description: "Version to build: a semver tag (e.g. 1.0.0) or a commit hash (7-40 hex chars). Leave empty to use image.yml."
         required: false
         type: string
   # An image tag of the form <image>/v<version> (created by Update Versions)

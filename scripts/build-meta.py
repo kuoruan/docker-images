@@ -18,8 +18,8 @@ Writes image=, version=, base_version=, platforms=, tag= to
 $GITHUB_OUTPUT. Called by .github/workflows/build.yml.
 
 Version model:
-    version      what `xcaddy build` compiles: a semver tag or a full 40-char
-                 commit hash (input wins over image.yml).
+    version      what `xcaddy build` compiles: a semver tag or a commit
+                 hash (7-40 hex chars; input wins over image.yml).
     tag          the docker tag for this build: the semver as-is, or the first
                  7 chars of a commit hash (matching GitHub's short SHA).
     base_version the caddy:<x>-builder/-alpine base image tag; always a semver:
@@ -37,8 +37,11 @@ from pathlib import Path
 import yaml
 
 VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$")
-# Full 40-char git commit hash (for building unreleased fixes).
-COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
+# Git commit hash for building unreleased fixes. xcaddy passes the version
+# straight through to `go get`, and the Go module proxy resolves short hashes
+# (e.g. 7 chars) to the same pseudo-version as the full 40-char hash,
+# so any unambiguous length in 7..40 is accepted.
+COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
 
 
 def resolve_from_event() -> tuple[str, str]:
@@ -87,8 +90,8 @@ def main() -> int:
     is_commit = bool(COMMIT_RE.match(version))
     if not is_commit and not VERSION_RE.match(version):
         print(
-            f"::error::Version must be a concrete tag such as 2.11.4, or a full "
-            f"40-char commit hash (got: {version})",
+            f"::error::Version must be a concrete tag such as 1.0.0, or a commit "
+            f'hash of 7-40 hex chars (got: {version})',
             file=sys.stderr,
         )
         return 1
@@ -99,7 +102,7 @@ def main() -> int:
         base_version = str(img.get("version", ""))
         if not VERSION_RE.match(base_version):
             print(
-                f"::error::image.yml version must be a semver tag such as 2.11.4; "
+                f"::error::image.yml version must be a semver tag such as 1.0.0; "
                 f"it is the base-image fallback for commit-hash builds (got: {base_version})",
                 file=sys.stderr,
             )

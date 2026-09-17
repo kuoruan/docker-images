@@ -3,8 +3,8 @@
 # Caddy with custom plugins, built via xcaddy.
 #
 # Version model (two args from the workflow):
-#   VERSION      what xcaddy compiles: a semver tag (2.11.4) or a full 40-char
-#                commit hash for unreleased fixes. Defaults to `latest` (latest
+#   VERSION      what xcaddy compiles: a semver tag (2.11.4) or a commit hash
+#                (7-40 hex chars) for unreleased fixes. Defaults to `latest` (latest
 #                stable tag) for manual builds; the workflow always passes the
 #                resolved version.
 #   BASE_VERSION the base image tag; always a semver. The builder stage uses
