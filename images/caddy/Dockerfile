@@ -4,11 +4,15 @@
 #
 # Version model (two args from the workflow):
 #   VERSION      what xcaddy compiles: a semver tag (2.11.4) or a full 40-char
-#                commit hash for unreleased fixes.
-#   BASE_VERSION the caddy:<x>-builder/-alpine base image tag; always a semver.
+#                commit hash for unreleased fixes. Defaults to `latest` (latest
+#                stable tag) for manual builds; the workflow always passes the
+#                resolved version.
+#   BASE_VERSION the base image tag; always a semver. The builder stage uses
+#                caddy:<x>-builder-alpine, the runtime stage caddy:<x>-alpine.
 #                It follows VERSION when VERSION is a semver, and falls back to
 #                image.yml's version for commit-hash builds (Docker Hub has no
-#                <hash>-builder tag).
+#                <hash>-builder-alpine tag). Defaults to the major line (2); the
+#                workflow always overrides it with the resolved semver.
 #
 # Multi-arch without QEMU:
 #   The builder stage is pinned to the build platform (--platform=$BUILDPLATFORM)
@@ -17,10 +21,10 @@
 #   so buildx pulls the target-arch base without emulation. CGO_ENABLED=0 keeps
 #   the pure-Go build cross-compilable; all included plugins must stay pure-Go.
 
-ARG VERSION
-ARG BASE_VERSION
+ARG VERSION=latest
+ARG BASE_VERSION=2
 
-FROM --platform=$BUILDPLATFORM caddy:${BASE_VERSION}-builder AS builder
+FROM --platform=$BUILDPLATFORM caddy:${BASE_VERSION}-builder-alpine AS builder
 
 ARG TARGETARCH
 ARG VERSION
