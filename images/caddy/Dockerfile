@@ -3,16 +3,16 @@
 # Caddy with custom plugins, built via xcaddy.
 #
 # Version model (two args from the workflow):
-#   VERSION      what xcaddy compiles: a semver tag (2.11.4) or a commit hash
-#                (7-40 hex chars) for unreleased fixes. Defaults to `latest` (latest
-#                stable tag) for manual builds; the workflow always passes the
-#                resolved version.
-#   BASE_VERSION the base image tag; always a semver. The builder stage uses
-#                caddy:<x>-builder-alpine, the runtime stage caddy:<x>-alpine.
-#                It follows VERSION when VERSION is a semver, and falls back to
-#                image.yml's version for commit-hash builds (Docker Hub has no
-#                <hash>-builder-alpine tag). Defaults to the major line (2); the
-#                workflow always overrides it with the resolved semver.
+#   BUILD_VERSION what xcaddy compiles: an upstream ref such as `v2.11.7` (the
+#                image.yml version with update.tag_prefix re-applied by the
+#                workflow) or a commit hash (7-40 hex chars) for unreleased
+#                fixes. Defaults to `latest` for manual builds.
+#   BASE_VERSION the base image tag; always a semver without the prefix. The
+#                builder stage uses caddy:<x>-builder-alpine, the runtime stage
+#                caddy:<x>-alpine. For a commit-hash build it falls back to
+#                image.yml's version, since Docker Hub has no <hash>-based tag.
+#                Defaults to the major line (2); the workflow always overrides
+#                it with the resolved semver.
 #
 # Multi-arch without QEMU:
 #   The builder stage is pinned to the build platform (--platform=$BUILDPLATFORM)
@@ -21,18 +21,18 @@
 #   so buildx pulls the target-arch base without emulation. CGO_ENABLED=0 keeps
 #   the pure-Go build cross-compilable; all included plugins must stay pure-Go.
 
-ARG VERSION=latest
+ARG BUILD_VERSION=latest
 ARG BASE_VERSION=2
 
 FROM --platform=$BUILDPLATFORM caddy:${BASE_VERSION}-builder-alpine AS builder
 
 ARG TARGETARCH
-ARG VERSION
+ARG BUILD_VERSION
 ARG GOPROXY=https://proxy.golang.org,direct
 
 ENV CGO_ENABLED=0
 
-RUN GOARCH=$TARGETARCH xcaddy build "${VERSION}" \
+RUN GOARCH=$TARGETARCH xcaddy build "${BUILD_VERSION}" \
       --with github.com/caddy-dns/cloudflare \
       --with github.com/WeidiDeng/caddy-cloudflare-ip \
       --with github.com/fvbommel/caddy-combine-ip-ranges \

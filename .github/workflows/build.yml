@@ -73,7 +73,7 @@ jobs:
           file: images/${{ steps.vars.outputs.image }}/Dockerfile
           platforms: ${{ steps.vars.outputs.platforms }}
           build-args: |
-            VERSION=${{ steps.vars.outputs.version }}
+            BUILD_VERSION=${{ steps.vars.outputs.build_version }}
             BASE_VERSION=${{ steps.vars.outputs.base_version }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}

@@ -14,17 +14,22 @@ Env:
     GITHUB_EVENT_NAME  push | workflow_dispatch
     GITHUB_OUTPUT   step output file
 
-Writes image=, version=, base_version=, platforms=, tag= to
+Writes image=, version=, build_version=, base_version=, platforms=, tag= to
 $GITHUB_OUTPUT. Called by .github/workflows/build.yml.
 
 Version model:
-    version      what `xcaddy build` compiles: a semver tag or a commit
-                 hash (7-40 hex chars; input wins over image.yml).
-    tag          the docker tag for this build: the semver as-is, or the first
-                 7 chars of a commit hash (matching GitHub's short SHA).
-    base_version the caddy:<x>-builder/-alpine base image tag; always a semver:
-                 follows version when it is a semver, else falls back to
-                 image.yml's version (Docker Hub has no <hash>-builder tag).
+    version       the human version: a semver tag or a commit hash (7-40 hex
+                  chars; the workflow input wins over image.yml).
+    build_version what `xcaddy build` compiles: the upstream ref to fetch. A
+                  semver gets image.yml's `update.tag_prefix` re-applied (so
+                  caddy's `2.11.7` becomes `v2.11.7`, which `go get` requires);
+                  a commit hash is passed through unchanged.
+    tag           the docker tag for this build: the semver as-is, or the first
+                  7 chars of a commit hash (matching GitHub's short SHA).
+    base_version  the caddy:<x>-builder-alpine / caddy:<x>-alpine base image
+                  tag; always a semver: follows version when it is a semver,
+                  else falls back to image.yml's version (Docker Hub has no
+                  <hash>-based tag).
 """
 
 from __future__ import annotations
@@ -96,6 +101,10 @@ def main() -> int:
         )
         return 1
 
+    # image.yml stores the version with `update.tag_prefix` stripped; re-apply
+    # it to get the upstream ref `go get` needs (e.g. caddy's `v2.11.7`).
+    tag_prefix = str((img.get("update") or {}).get("tag_prefix") or "")
+
     # Base image tag: follows a semver version; falls back to image.yml's
     # version when building a commit hash (Docker Hub has no <hash>-builder tag).
     if is_commit:
@@ -107,8 +116,10 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
+        build_version = version
     else:
         base_version = version
+        build_version = f"{tag_prefix}{version}"
 
     platforms = ",".join(img.get("platforms") or [])
 
@@ -119,6 +130,7 @@ def main() -> int:
     with open(github_output, "a") as f:
         f.write(f"image={image}\n")
         f.write(f"version={version}\n")
+        f.write(f"build_version={build_version}\n")
         f.write(f"base_version={base_version}\n")
         f.write(f"platforms={platforms}\n")
         # Docker tag: short hash (7 chars, like GitHub's short SHA) for commit

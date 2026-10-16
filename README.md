@@ -24,9 +24,10 @@ and run. The build pushes to `ghcr.io/<owner>/<image>`.
 Every build is pinned to a concrete version and pushes `<version>`, `latest`,
 and `sha-<short>` tags. `latest` always points at the most recent build, which
 may differ from the newest released version (for example, when an older
-version is rebuilt manually). Reproducible. The workflow passes a single `VERSION`
-build-arg; each image's `Dockerfile` uses it to assemble its own `FROM` lines,
-so the workflow stays image-agnostic (no per-image base-tag assumptions).
+version is rebuilt manually). Reproducible. The workflow passes two build-args,
+`BUILD_VERSION` (the upstream ref to fetch) and `BASE_VERSION` (the base image
+tag); each image's `Dockerfile` uses them to assemble its own `FROM` lines, so
+the workflow stays image-agnostic (no per-image base-tag assumptions).
 
 A separate [`sync-check`](.github/workflows/sync-check.yml) workflow fails on
 push/PR if the `image` choice list drifts from the `images/*/` directories.
