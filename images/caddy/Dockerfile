@@ -2,24 +2,12 @@
 
 # Caddy with custom plugins, built via xcaddy.
 #
-# Version model (two args from the workflow):
-#   BUILD_VERSION what xcaddy compiles: an upstream ref such as `v2.11.7` (the
-#                image.yml version with update.tag_prefix re-applied by the
-#                workflow) or a commit hash (7-40 hex chars) for unreleased
-#                fixes. Defaults to `latest` for manual builds.
-#   BASE_VERSION the base image tag; always a semver without the prefix. The
-#                builder stage uses caddy:<x>-builder-alpine, the runtime stage
-#                caddy:<x>-alpine. For a commit-hash build it falls back to
-#                image.yml's version, since Docker Hub has no <hash>-based tag.
-#                Defaults to the major line (2); the workflow always overrides
-#                it with the resolved semver.
-#
-# Multi-arch without QEMU:
-#   The builder stage is pinned to the build platform (--platform=$BUILDPLATFORM)
-#   and cross-compiles the Caddy binary via GOARCH=$TARGETARCH (xcaddy passes
-#   GOOS/GOARCH/GOARM through to go build). The runtime stage has no RUN steps,
-#   so buildx pulls the target-arch base without emulation. CGO_ENABLED=0 keeps
-#   the pure-Go build cross-compilable; all included plugins must stay pure-Go.
+# BUILD_VERSION: upstream ref to compile — a tag like v2.11.7 (image.yml version
+#                with update.tag_prefix re-applied by the workflow), a commit
+#                hash, or `latest` (manual builds).
+# BASE_VERSION:  semver without the prefix, used for both caddy:<x>-builder-alpine
+#                and caddy:<x>-alpine. Commit-hash builds fall back to image.yml's
+#                version, since Docker Hub has no <hash>-based tags.
 
 ARG BUILD_VERSION=latest
 ARG BASE_VERSION=2
@@ -32,7 +20,13 @@ ARG GOPROXY=https://proxy.golang.org,direct
 
 ENV CGO_ENABLED=0
 
+# Fetch Caddy source and apply the forwardproxy naive patches (sing-quic BBRv1,
+# read-idle-timeout); the result replaces caddy/v2 below.
+COPY --chmod=755 caddy-src.sh /usr/local/bin/caddy-src
+RUN caddy-src "${BUILD_VERSION}" /src/caddy
+
 RUN GOARCH=$TARGETARCH xcaddy build "${BUILD_VERSION}" \
+      --replace github.com/caddyserver/caddy/v2=/src/caddy \
       --with github.com/caddy-dns/cloudflare \
       --with github.com/WeidiDeng/caddy-cloudflare-ip \
       --with github.com/fvbommel/caddy-combine-ip-ranges \
