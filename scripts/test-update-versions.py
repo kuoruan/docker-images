@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Local checks for the update-check hook handling in update-versions.py.
+"""Local checks for the scripts behind the Update Versions workflow: the
+update-check hook handling in update-versions.py, and the dispatch in
+dispatch-builds.py.
 
 Run from anywhere:  python3 scripts/test-update-versions.py
 
@@ -173,6 +175,32 @@ def main() -> int:
             check("the timed-out image is not in .changes", "slow\t" not in changes_after)
         finally:
             os.chdir(original_cwd)
+
+        print("dispatch-builds.py: one workflow dispatch per changed image")
+        dispatch_bin = root / "bin-dispatch"
+        dispatch_bin.mkdir()
+        calls = root / "gh-calls.txt"
+        (dispatch_bin / "gh").write_text(f'#!/bin/sh\necho "$@" >> "{calls}"\n')
+        (dispatch_bin / "gh").chmod(0o755)
+        (root / ".changes").write_text("caddy\t2.11.7\nnginx-proxy\t1.2.3\n")
+        dispatch_env = dict(os.environ, PATH=f"{dispatch_bin}{os.pathsep}{os.environ['PATH']}")
+        dispatch_cmd = [sys.executable, str(REPO_ROOT / "scripts" / "dispatch-builds.py")]
+        proc = subprocess.run(dispatch_cmd, cwd=root, env=dispatch_env, capture_output=True, text=True, check=False)
+        dispatched = calls.read_text()
+        check("exit 0", proc.returncode == 0, proc.stderr)
+        check("one dispatch per image", len(dispatched.splitlines()) == 2, dispatched)
+        check(
+            "image and version are passed as workflow inputs",
+            "build.yml -f image=nginx-proxy -f version=1.2.3" in dispatched,
+            dispatched,
+        )
+
+        print("dispatch-builds.py: a rejected dispatch fails the step, the rest are still attempted")
+        (dispatch_bin / "gh").write_text("#!/bin/sh\nexit 1\n")
+        proc = subprocess.run(dispatch_cmd, cwd=root, env=dispatch_env, capture_output=True, text=True, check=False)
+        check("exit 1", proc.returncode == 1, str(proc.returncode))
+        check("error names the failed image", "failed to dispatch build.yml for caddy 2.11.7" in proc.stdout, proc.stdout)
+        check("both images were attempted", proc.stdout.count("::error::failed to dispatch") == 2, proc.stdout)
 
     print()
     if failures:

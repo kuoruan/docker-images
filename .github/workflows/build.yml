@@ -13,8 +13,10 @@ on:
         description: "Version to build: a semver tag (e.g. 1.0.0) or a commit hash (7-40 hex chars). Leave empty to use image.yml."
         required: false
         type: string
-  # An image tag of the form <image>/v<version> (created by Update Versions)
-  # triggers a build of that image at that version.
+  # An image tag of the form <image>/v<version> triggers a build of that image
+  # at that version. Update Versions does not depend on this trigger (a tag it
+  # pushes with the default GITHUB_TOKEN starts nothing) and dispatches the
+  # workflow explicitly instead; see scripts/dispatch-builds.py.
   push:
     tags:
       - '*/v*'

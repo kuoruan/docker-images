@@ -2,10 +2,9 @@
 """Tag each image listed in ``.changes`` as ``<image>/v<version>`` and push.
 
 ``.changes`` is written by ``update-versions.py`` as ``image<TAB>version``
-lines, one per bumped image. A tag of the form ``<image>/v<version>`` matches
-the Build Image workflow's ``push.tags`` trigger, but GitHub starts no run for a
-push made with the default ``GITHUB_TOKEN``: the tags this script creates build
-nothing by themselves.
+lines, one per bumped image. The tags record which version was released; they
+are not the build trigger, because GitHub starts no run for a push made with the
+default ``GITHUB_TOKEN``. ``dispatch-builds.py`` starts the builds.
 
 Existence is checked against the remote once per run (``git ls-remote``) so a
 tag that was created locally but failed to push is retried instead of being

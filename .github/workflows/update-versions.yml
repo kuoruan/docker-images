@@ -4,8 +4,9 @@ name: Update Versions
 # round-trip), when the image declares an `update` source. An image may ship an
 # `update-check.sh` hook that vetoes versions it cannot build; a rejected bump
 # keeps the current pin. After committing, each bumped image is tagged as
-# <image>/v<version> and pushed; that tag triggers the Build Image workflow
-# (its push.tags trigger).
+# <image>/v<version> and a Build Image run is dispatched for it. The dispatch is
+# what builds: the tag alone starts nothing, since GitHub creates no workflow
+# run for a push made with the default GITHUB_TOKEN.
 
 on:
   schedule:
@@ -14,6 +15,8 @@ on:
 
 permissions:
   contents: write
+  # Needed by scripts/dispatch-builds.py to start Build Image runs.
+  actions: write
 
 env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -43,9 +46,13 @@ jobs:
           commit_message: "chore: bump image versions to latest upstream"
           file_pattern: images/
 
-      # Tag each bumped image as <image>/v<version>; pushing the tag triggers
-      # the Build Image workflow via its push.tags trigger.
+      # Tag each bumped image as <image>/v<version>, for the record; the tag
+      # itself does not start a build (see the dispatch step below).
       - name: Tag bumped images
         if: steps.commit.outputs.changes_detected == 'true'
         run: python3 scripts/tag-bumped.py
+
+      - name: Dispatch builds
+        if: steps.commit.outputs.changes_detected == 'true'
+        run: python3 scripts/dispatch-builds.py
 

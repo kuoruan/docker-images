@@ -12,7 +12,7 @@ Each image lives in its own directory under [`images/`](./images) with a `Docker
 
 ## Build
 
-A build runs on demand: go to **Actions → Build Image → Run workflow**, pick an image from the dropdown, and optionally pass a concrete `version` (defaults to that image's [`image.yml`](./images/caddy/image.yml)). The build pushes to `ghcr.io/<owner>/<image>`.
+A build runs on demand — go to **Actions → Build Image → Run workflow**, pick an image from the dropdown, and optionally pass a concrete `version` (defaults to that image's [`image.yml`](./images/caddy/image.yml)) — or automatically after Update Versions bumps an image. The build pushes to `ghcr.io/<owner>/<image>`.
 
 Every build is pinned to a concrete version and pushes `<version>`, `latest`, and `sha-<short>` tags. `latest` points at the most recent build, which may differ from the newest released version (for example, when an older version is rebuilt manually). The workflow passes two build-args, `BUILD_VERSION` (the upstream ref to fetch) and `BASE_VERSION` (the base image tag); each image's `Dockerfile` uses them to assemble its own `FROM` lines, so the workflow stays image-agnostic (no per-image base-tag assumptions).
 
@@ -33,7 +33,7 @@ update:
   tag_prefix: v            # strip this prefix from the tag to get the version
 ```
 
-[`update-versions`](.github/workflows/update-versions.yml) rewrites each image's `version:` line to the latest upstream release on a weekly schedule (and manually), then tags each bumped image as `<image>/v<version>`. Those tags do not start a build: GitHub does not create workflow runs for events caused by the default `GITHUB_TOKEN`, which is what that workflow pushes with.
+[`update-versions`](.github/workflows/update-versions.yml) rewrites each image's `version:` line to the latest upstream release on a weekly schedule (and manually), then tags each bumped image as `<image>/v<version>` and dispatches a Build Image run for it. The dispatch is what builds: a tag pushed with the default `GITHUB_TOKEN` starts nothing, so the workflow asks the API to run the build explicitly (which is why it holds the `actions: write` permission and not just `contents: write`).
 
 An image whose build only works for some upstream releases (for example because it applies version-specific patches) can ship an `update-check.sh` hook next to its `Dockerfile`. Update Versions runs it with the upstream tag as its only argument; exit 0 allows the bump, any non-zero status or timeout skips that image and keeps the current pin:
 
