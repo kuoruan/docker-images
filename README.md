@@ -1,12 +1,8 @@
 # docker-images
 
-Personal Docker images, built via GitHub Actions and published to the
-[GitHub Container Registry](https://ghcr.io) under `ghcr.io/<owner>/<image>`.
+Personal Docker images, built via GitHub Actions and published to the [GitHub Container Registry](https://ghcr.io) under `ghcr.io/<owner>/<image>`.
 
-Each image lives in its own directory under [`images/`](./images) with a
-`Dockerfile` (the build recipe) and an `image.yml` (metadata consumed by the
-build workflow). Workflow logic lives in small scripts under [`scripts/`](./scripts),
-kept out of the YAML for readability and local testing.
+Each image lives in its own directory under [`images/`](./images) with a `Dockerfile` (the build recipe) and an `image.yml` (metadata consumed by the build workflow). Workflow logic lives in small scripts under [`scripts/`](./scripts), kept out of the YAML for readability and local testing.
 
 ## Images
 
@@ -16,33 +12,20 @@ kept out of the YAML for readability and local testing.
 
 ## Build
 
-Builds are **manually triggered**. Go to **Actions → Build Image →
-Run workflow**, pick an image from the dropdown, optionally pass a concrete
-`version` (defaults to that image's [`image.yml`](./images/caddy/image.yml)),
-and run. The build pushes to `ghcr.io/<owner>/<image>`.
+A build runs on demand: go to **Actions → Build Image → Run workflow**, pick an image from the dropdown, and optionally pass a concrete `version` (defaults to that image's [`image.yml`](./images/caddy/image.yml)). The build pushes to `ghcr.io/<owner>/<image>`.
 
-Every build is pinned to a concrete version and pushes `<version>`, `latest`,
-and `sha-<short>` tags. `latest` always points at the most recent build, which
-may differ from the newest released version (for example, when an older
-version is rebuilt manually). Reproducible. The workflow passes two build-args,
-`BUILD_VERSION` (the upstream ref to fetch) and `BASE_VERSION` (the base image
-tag); each image's `Dockerfile` uses them to assemble its own `FROM` lines, so
-the workflow stays image-agnostic (no per-image base-tag assumptions).
+Every build is pinned to a concrete version and pushes `<version>`, `latest`, and `sha-<short>` tags. `latest` points at the most recent build, which may differ from the newest released version (for example, when an older version is rebuilt manually). The workflow passes two build-args, `BUILD_VERSION` (the upstream ref to fetch) and `BASE_VERSION` (the base image tag); each image's `Dockerfile` uses them to assemble its own `FROM` lines, so the workflow stays image-agnostic (no per-image base-tag assumptions).
 
-A separate [`sync-check`](.github/workflows/sync-check.yml) workflow fails on
-push/PR if the `image` choice list drifts from the `images/*/` directories.
+A separate [`sync-check`](.github/workflows/sync-check.yml) workflow fails on push/PR if the `image` choice list drifts from the `images/*/` directories.
 
 ## Add a new image
 
-1. Create `images/<name>/` with `Dockerfile`, `image.yml`, and `README.md`
-   (see [`images/caddy`](./images/caddy) as a template).
-2. Add `<name>` to the `image` choice `options` in
-   [`.github/workflows/build.yml`](./.github/workflows/build.yml).
+1. Create `images/<name>/` with `Dockerfile`, `image.yml`, and `README.md` (see [`images/caddy`](./images/caddy) as a template).
+2. Add `<name>` to the `image` choice `options` in [`.github/workflows/build.yml`](./.github/workflows/build.yml).
 
-The `sync-check` job fails the build if step 2 is skipped.
+The `sync-check` workflow fails if step 2 is skipped.
 
-To opt a new image into the weekly version bump, add an `update:` block to its
-`image.yml` (see [`images/caddy/image.yml`](./images/caddy/image.yml)):
+To opt a new image into the weekly version bump, add an `update:` block to its `image.yml` (see [`images/caddy/image.yml`](./images/caddy/image.yml)):
 
 ```yaml
 update:
@@ -50,15 +33,9 @@ update:
   tag_prefix: v            # strip this prefix from the tag to get the version
 ```
 
-[`update-versions`](.github/workflows/update-versions.yml) rewrites each
-image's `version:` line to the latest upstream release on a weekly schedule
-(and manually), then tags the bumped images so their builds run.
+[`update-versions`](.github/workflows/update-versions.yml) rewrites each image's `version:` line to the latest upstream release on a weekly schedule (and manually), then tags each bumped image as `<image>/v<version>`. Those tags do not start a build: GitHub does not create workflow runs for events caused by the default `GITHUB_TOKEN`, which is what that workflow pushes with.
 
-An image whose build only works for some upstream releases (for example
-because it applies version-specific patches) can ship an `update-check.sh`
-hook next to its `Dockerfile`. Update Versions runs it with the upstream tag
-as its only argument; exit 0 allows the bump, any non-zero status or timeout
-skips that image and keeps the current pin:
+An image whose build only works for some upstream releases (for example because it applies version-specific patches) can ship an `update-check.sh` hook next to its `Dockerfile`. Update Versions runs it with the upstream tag as its only argument; exit 0 allows the bump, any non-zero status or timeout skips that image and keeps the current pin:
 
 ```sh
 #!/bin/sh
@@ -67,18 +44,10 @@ set -eu
 check-patches-apply "$1"   # your check here
 ```
 
-That gate logic is covered by [`scripts/test-update-versions.py`](./scripts/test-update-versions.py)
-(`python3 scripts/test-update-versions.py`, no network needed).
+That gate logic is covered by [`scripts/test-update-versions.py`](./scripts/test-update-versions.py) (`python3 scripts/test-update-versions.py`, no network needed).
 
 ## Notes
 
-- GHCR packages are created **private** by default; the `GITHUB_TOKEN` can push
-  packages but cannot change their visibility, so a new package must be made
-  public manually from its package settings page.
-- Multi-arch images (`linux/amd64`, `linux/arm64`) are built by cross-
-  compilation on an amd64 runner (no QEMU emulation). Arm64 builds are verified
-  to compile, but are **not run-tested** in CI (runners are amd64 only) — they
-  should be validated on an arm64 host before production use.
-- The default branch is `main`. If `main` has branch protection that blocks
-  direct pushes, the `update-versions` cron's auto-commit will fail; either allow
-  the `GITHUB_TOKEN` to push, or switch that workflow to open a PR.
+- GHCR packages are created **private** by default; the `GITHUB_TOKEN` can push packages but cannot change their visibility, so a new package must be made public manually from its package settings page.
+- Multi-arch images (`linux/amd64`, `linux/arm64`) are built by cross-compilation on an amd64 runner (no QEMU emulation). Arm64 builds are verified to compile, but are **not run-tested** in CI (runners are amd64 only) — they should be validated on an arm64 host before production use.
+- The default branch is `main`. If `main` has branch protection that blocks direct pushes, the `update-versions` cron's auto-commit will fail; either allow the `GITHUB_TOKEN` to push, or switch that workflow to open a PR.
