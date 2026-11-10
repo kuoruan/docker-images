@@ -52,6 +52,15 @@ def version_of(img: Path) -> str:
     return ""
 
 
+def process_alive(pid: str) -> bool:
+    """True if pid exists and has not been reaped (a zombie counts as gone)."""
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().split()[2]
+    except (FileNotFoundError, IndexError):
+        return False
+    return state != "Z"
+
+
 def load_module(script: Path):
     spec = importlib.util.spec_from_file_location("update_versions", script)
     module = importlib.util.module_from_spec(spec)
@@ -117,24 +126,53 @@ def main() -> int:
         # can be proven without waiting the production 600s.
         module = load_module(root / "scripts" / "update-versions.py")
         module.HOOK_TIMEOUT = HOOK_TIMEOUT_UNDER_TEST
-        os.chdir(root)
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(root)
 
-        slow = make_image(root, "slow", "1.0.0", "#!/bin/sh\nsleep 30\n")
-        print(f"hook times out ({HOOK_TIMEOUT_UNDER_TEST}s): bump vetoed, run continues")
-        started = time.time()
-        allowed_by_slow = module.bump_allowed("slow", UPSTREAM_TAG)
-        elapsed = time.time() - started
-        check("vetoed", allowed_by_slow is False)
-        check("returned promptly", elapsed < 10, f"{elapsed:.1f}s")
+            # The hook backgrounds a child and records its pid: a timeout must
+            # take down the whole process group, not just the `sh` we started.
+            slow = make_image(root, "slow", "1.0.0", "#!/bin/sh\nsleep 30 &\necho $! > child.pid\nwait\n")
+            print(f"hook times out ({HOOK_TIMEOUT_UNDER_TEST}s): bump vetoed, group killed")
+            started = time.time()
+            allowed_by_slow = module.bump_allowed("slow", UPSTREAM_TAG)
+            elapsed = time.time() - started
+            check("vetoed", allowed_by_slow is False)
+            check("returned promptly", elapsed < 10, f"{elapsed:.1f}s")
 
-        (slow / "update-check.sh").unlink()
-        (slow / "update-check.sh").mkdir()
-        print("hook path is not a regular file: vetoed, not silently allowed")
-        check("vetoed", module.bump_allowed("slow", UPSTREAM_TAG) is False)
+            child_pid = (root / "child.pid").read_text().strip()
+            deadline = time.time() + 2
+            while process_alive(child_pid) and time.time() < deadline:
+                time.sleep(0.1)
+            check("hook's child did not survive the timeout", not process_alive(child_pid), child_pid)
 
-        print("unknown image with no hook: allowed")
-        (root / "images" / "nohooks").mkdir()
-        check("allowed", module.bump_allowed("nohooks", UPSTREAM_TAG) is True)
+            (slow / "update-check.sh").unlink()
+            (slow / "update-check.sh").mkdir()
+            print("hook path is not a regular file: vetoed, not silently allowed")
+            check("vetoed", module.bump_allowed("slow", UPSTREAM_TAG) is False)
+
+            print("unknown image with no hook: allowed")
+            (root / "images" / "nohooks").mkdir()
+            check("allowed", module.bump_allowed("nohooks", UPSTREAM_TAG) is True)
+
+            print("a timing-out image does not stop the rest of the run")
+            (slow / "update-check.sh").rmdir()
+            (slow / "update-check.sh").write_text("#!/bin/sh\nsleep 30\n")
+            plain_yml = root / "images" / "plain" / "image.yml"
+            plain_yml.write_text(plain_yml.read_text().replace("version: 9.9.9", "version: 1.0.0"))
+            rejected_yml = root / "images" / "rejected" / "image.yml"
+            rejected_before = rejected_yml.read_bytes()
+
+            os.environ["PATH"] = env["PATH"]
+            os.environ["GITHUB_OUTPUT"] = env["GITHUB_OUTPUT"]
+            rc = module.main()
+            changes_after = (root / ".changes").read_text()
+            check("run still exits 0", rc == 0, str(rc))
+            check("an image after the timeout was still bumped", version_of(plain_yml.parent) == "9.9.9")
+            check("the vetoed image.yml is byte-identical", rejected_yml.read_bytes() == rejected_before)
+            check("the timed-out image is not in .changes", "slow\t" not in changes_after)
+        finally:
+            os.chdir(original_cwd)
 
     print()
     if failures:

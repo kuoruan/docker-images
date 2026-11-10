@@ -7,9 +7,9 @@ image declares an `update.github` source. Writes changed images (as
 If an image ships an ``update-check.sh`` hook, it decides whether the new
 version is allowed: the hook receives the upstream tag as its only argument,
 exit 0 permits the bump, and any other exit status (or a timeout/failure to
-run it) skips that image so the current pin is kept. This lets an image veto a
-release its build cannot produce, for example when its patches no longer
-apply.
+run it) skips that image so the current pin is kept. An image uses this to veto
+a release its build does not support, for example one its patches no longer
+apply to.
 
 Reads and writes with PyYAML (YAML round-trip); blank lines/comments are not
 preserved. Called by .github/workflows/update-versions.yml.
@@ -18,6 +18,7 @@ preserved. Called by .github/workflows/update-versions.yml.
 from __future__ import annotations
 
 import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -45,11 +46,37 @@ def latest_release(repo: str) -> str | None:
     return out.stdout.strip() or None
 
 
-def bump_allowed(name: str, tag: str) -> bool:
-    """Ask the image's update-check hook whether ``tag`` may be bumped to.
+def run_hook(hook: Path, tag: str) -> subprocess.CompletedProcess[str]:
+    """Run the hook in its own process group, killing that group on timeout.
 
-    Images without a hook are always allowed. A rejecting hook's last output
-    line is reported as the reason.
+    ``subprocess.run(timeout=...)`` kills only the ``sh`` it started: the hook's
+    own children (``wget``, ``git``) survive and its ``trap`` cleanup never runs,
+    so the temp tree leaks. A new session lets ``killpg`` reach the whole tree.
+    """
+    with subprocess.Popen(
+        ["sh", str(hook), tag],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    ) as proc:
+        try:
+            out, err = proc.communicate(timeout=HOOK_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.communicate()
+            raise
+    return subprocess.CompletedProcess(proc.args, proc.returncode, out, err)
+
+
+def bump_allowed(name: str, tag: str) -> bool:
+    """Return True if the image's update-check hook allows bumping to ``tag``.
+
+    Images without a hook are allowed. A rejecting hook's last output line is
+    reported as the reason.
     """
     hook = Path("images") / name / UPDATE_CHECK
     if not hook.exists():
@@ -60,13 +87,7 @@ def bump_allowed(name: str, tag: str) -> bool:
         print(f"::warning::{name}: {UPDATE_CHECK} is not a regular file; skipping")
         return False
     try:
-        proc = subprocess.run(
-            ["sh", str(hook), tag],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=HOOK_TIMEOUT,
-        )
+        proc = run_hook(hook, tag)
     except subprocess.TimeoutExpired:
         print(f"::warning::{name}: {UPDATE_CHECK} timed out after {HOOK_TIMEOUT}s for {tag}; skipping")
         return False
@@ -111,12 +132,13 @@ def main() -> int:
             print(f"::warning::{name}: keeping {cur}")
             continue
 
-        # Write the bumped version back.
+        # Re-dump the whole file: PyYAML preserves no comments (see the module
+        # docstring).
         img["version"] = latest
         with open(img_path, "w") as f:
             yaml.safe_dump(img, f, sort_keys=False, default_flow_style=False)
 
-        # Verify the write landed.
+        # Confirm that what PyYAML wrote reads back as the same string.
         with open(img_path) as f:
             got = str((yaml.safe_load(f) or {}).get("version", ""))
         if got != latest:
