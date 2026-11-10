@@ -18,8 +18,8 @@ Writes image=, version=, build_version=, base_version=, platforms=, tag= to
 $GITHUB_OUTPUT. Called by .github/workflows/build.yml.
 
 Version model:
-    version       the human version: a semver tag or a commit hash (7-40 hex
-                  chars; the workflow input wins over image.yml).
+    version       the requested version: a semver tag or a commit hash (7-40
+                  hex chars; the workflow input wins over image.yml).
     build_version what `xcaddy build` compiles: the upstream ref to fetch. A
                   semver gets image.yml's `update.tag_prefix` re-applied (so
                   caddy's `2.11.7` becomes `v2.11.7`, which `go get` requires);
@@ -45,27 +45,34 @@ VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$")
 # Git commit hash for building unreleased fixes. xcaddy passes the version
 # straight through to `go get`, and the Go module proxy resolves short hashes
 # (e.g. 7 chars) to the same pseudo-version as the full 40-char hash,
-# so any unambiguous length in 7..40 is accepted.
+# so any unambiguous length in 7-40 is accepted.
 COMMIT_RE = re.compile(r"^[0-9a-f]{7,40}$")
+
+
+class EventError(Exception):
+    """The triggering event does not identify an image (and version) to build."""
 
 
 def resolve_from_event() -> tuple[str, str]:
     """Return (image, version_hint) from the triggering event.
 
     version_hint may be empty (workflow_dispatch with no version input),
-    meaning "use image.yml".
+    meaning "use image.yml". Raises EventError if the event carries no usable
+    tag.
     """
     event = os.environ.get("GITHUB_EVENT_NAME", "")
     if event == "push":
         ref = os.environ.get("GITHUB_REF", "")
         if not ref.startswith("refs/tags/"):
-            print(f"::error::expected a tag ref (refs/tags/...), got: {ref}", file=sys.stderr)
-            sys.exit(1)
+            raise EventError(f"expected a tag ref (refs/tags/...), got: {ref}")
         tag = ref[len("refs/tags/"):]
         if "/" not in tag:
-            print(f"::error::Tag '{tag}' is not of the form <image>/v<version>", file=sys.stderr)
-            sys.exit(1)
+            raise EventError(f"Tag '{tag}' is not of the form <image>/v<version>")
         image, vpart = tag.split("/", 1)
+        # The leading `v` is a fixed marker in the tag name, not image.yml's
+        # `tag_prefix`: tags are always written as <image>/v<version>, so
+        # stripping it here and re-applying the prefix in main() round-trips for
+        # any prefix.
         return image, vpart.removeprefix("v")
     # workflow_dispatch
     image = os.environ.get("INPUT_IMAGE", "")
@@ -74,7 +81,11 @@ def resolve_from_event() -> tuple[str, str]:
 
 
 def main() -> int:
-    image, version_input = resolve_from_event()
+    try:
+        image, version_input = resolve_from_event()
+    except EventError as exc:
+        print(f"::error::{exc}", file=sys.stderr)
+        return 1
     if not image:
         print("::error::image could not be resolved from the event", file=sys.stderr)
         return 1
@@ -82,7 +93,7 @@ def main() -> int:
     img_dir = Path("images") / image
     img_yml = img_dir / "image.yml"
     dockerfile = img_dir / "Dockerfile"
-    for p in (img_dir, dockerfile, img_yml):
+    for p in (dockerfile, img_yml):
         if not p.exists():
             print(f"::error::{p} not found", file=sys.stderr)
             return 1
@@ -90,13 +101,14 @@ def main() -> int:
     with open(img_yml) as f:
         img = yaml.safe_load(f) or {}
 
-    version = version_input or str(img.get("version", ""))
+    yml_version = str(img.get("version", ""))
+    version = version_input or yml_version
 
     is_commit = bool(COMMIT_RE.match(version))
     if not is_commit and not VERSION_RE.match(version):
         print(
             f"::error::Version must be a concrete tag such as 1.0.0, or a commit "
-            f'hash of 7-40 hex chars (got: {version})',
+            f"hash of 7-40 hex chars (got: {version})",
             file=sys.stderr,
         )
         return 1
@@ -106,9 +118,9 @@ def main() -> int:
     tag_prefix = str((img.get("update") or {}).get("tag_prefix") or "")
 
     # Base image tag: follows a semver version; falls back to image.yml's
-    # version when building a commit hash (Docker Hub has no <hash>-builder tag).
+    # version when building a commit hash (Docker Hub has no <hash>-based tags).
     if is_commit:
-        base_version = str(img.get("version", ""))
+        base_version = yml_version
         if not VERSION_RE.match(base_version):
             print(
                 f"::error::image.yml version must be a semver tag such as 1.0.0; "

@@ -2,13 +2,15 @@
 """Tag each image listed in ``.changes`` as ``<image>/v<version>`` and push.
 
 ``.changes`` is written by ``update-versions.py`` as ``image<TAB>version``
-lines, one per bumped image. Pushing a tag of the form ``<image>/v<version>``
-triggers the Build Image workflow (its ``push.tags`` trigger).
+lines, one per bumped image. A tag of the form ``<image>/v<version>`` matches
+the Build Image workflow's ``push.tags`` trigger, but GitHub starts no run for a
+push made with the default ``GITHUB_TOKEN``: the tags this script creates build
+nothing by themselves.
 
-Existence is checked against the remote (``git ls-remote``) so a tag that was
-created locally but failed to push is retried instead of being silently
-skipped. If a push fails, the local tag is rolled back so the next run can
-retry cleanly. Called by ``.github/workflows/update-versions.yml`` after the
+Existence is checked against the remote once per run (``git ls-remote``) so a
+tag that was created locally but failed to push is retried instead of being
+silently skipped. If a push fails, the local tag is rolled back so the next run
+can retry cleanly. Called by ``.github/workflows/update-versions.yml`` after the
 commit step.
 """
 
@@ -21,20 +23,35 @@ from pathlib import Path
 CHANGES_FILE = Path(".changes")
 
 
-def remote_tag_exists(tag: str) -> bool:
-    """True if the tag already exists on the remote (origin)."""
-    r = subprocess.run(
-        ["git", "ls-remote", "--tags", "origin", f"refs/tags/{tag}"],
-        capture_output=True,
-        text=True,
-    )
-    return r.returncode == 0 and bool(r.stdout.strip())
+def remote_tags() -> set[str] | None:
+    """Return the tags that already exist on the remote (origin), or None."""
+    try:
+        r = subprocess.run(
+            ["git", "ls-remote", "--tags", "origin"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"::error::git ls-remote failed: {(exc.stderr or '').strip()}", file=sys.stderr)
+        return None
+    tags = set()
+    for line in r.stdout.splitlines():
+        _, _, ref = line.partition("\t")
+        # Peeled entries for annotated tags (refs/tags/x^{}) are not tag names.
+        if ref.startswith("refs/tags/") and not ref.endswith("^{}"):
+            tags.add(ref[len("refs/tags/"):])
+    return tags
 
 
 def main() -> int:
     if not CHANGES_FILE.exists():
         print("no .changes file; nothing to tag")
         return 0
+
+    remote = remote_tags()
+    if remote is None:
+        return 1
 
     for line in CHANGES_FILE.read_text().splitlines():
         if not line.strip():
@@ -44,9 +61,12 @@ def main() -> int:
             print(f"::warning::skipping malformed .changes line: {line!r}")
             continue
         name, version = parts
+        # The `v` is a fixed marker in the tag name, not image.yml's
+        # `tag_prefix`: build-meta.py strips it and re-applies the prefix, so
+        # the round-trip holds for any prefix.
         tag = f"{name}/v{version}"
 
-        if remote_tag_exists(tag):
+        if tag in remote:
             print(f"tag {tag} already exists on remote, skipping")
             continue
 
@@ -58,6 +78,7 @@ def main() -> int:
             subprocess.run(["git", "tag", "-d", tag], capture_output=True)
             print(f"::error::failed to push tag {tag}; rolled back local tag")
             return 1
+        remote.add(tag)
         print(f"tagged {tag}")
     return 0
 

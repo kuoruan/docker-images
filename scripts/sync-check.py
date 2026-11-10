@@ -16,9 +16,13 @@ def main() -> int:
         wf = yaml.safe_load(f)
     # PyYAML parses the bare `on:` key as boolean True.
     on = wf.get("on") or wf.get(True) or {}
-    options = sorted((on.get("workflow_dispatch") or {}).get("inputs", {}).get("image", {}).get("options", []))
+    dispatch = on.get("workflow_dispatch") or {}
+    image_input = (dispatch.get("inputs") or {}).get("image") or {}
+    options = sorted(image_input.get("options") or [])
 
-    dirs = sorted(p.name for p in Path("images").iterdir() if p.is_dir())
+    # glob("*/") matches directories only, and yields nothing when images/ is
+    # missing instead of raising.
+    dirs = sorted(p.name for p in Path("images").glob("*/"))
 
     print("workflow 'image' choice options:")
     print("\n".join(options))

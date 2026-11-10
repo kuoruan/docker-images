@@ -9,11 +9,13 @@ on:
     branches: [main]
     paths:
       - 'images/**'
+      - 'scripts/sync-check.py'
       - '.github/workflows/build.yml'
       - '.github/workflows/sync-check.yml'
   pull_request:
     paths:
       - 'images/**'
+      - 'scripts/sync-check.py'
       - '.github/workflows/build.yml'
       - '.github/workflows/sync-check.yml'
   workflow_dispatch:
