@@ -1,9 +1,11 @@
 name: Update Versions
 
 # Bumps each image.yml's `version` to the latest upstream release (PyYAML
-# round-trip), when the image declares an `update` source. After committing,
-# each bumped image is tagged as <image>/v<version> and pushed; that tag
-# triggers the Build Image workflow (its push.tags trigger).
+# round-trip), when the image declares an `update` source. An image may ship an
+# `update-check.sh` hook that vetoes versions it cannot build; a rejected bump
+# keeps the current pin. After committing, each bumped image is tagged as
+# <image>/v<version> and pushed; that tag triggers the Build Image workflow
+# (its push.tags trigger).
 
 on:
   schedule:

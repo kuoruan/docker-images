@@ -18,20 +18,26 @@ ref_arg="${1:?usage: caddy-src.sh <ref> <dest>}"
 dest="${2:?usage: caddy-src.sh <ref> <dest>}"
 proxy_url=https://raw.githubusercontent.com/klzgrad/forwardproxy/naive
 patches="caddy-sing-quic-bbrv1.patch caddy-read-idle-timeout.patch"
+# Bound the network calls so a stalled fetch cannot hang a build (or the
+# Update Versions hook that runs this script) indefinitely.
+wget_opts="--timeout=30 --tries=3"
 
 if [ "$ref_arg" = "latest" ]; then
 	# The patches target one specific Caddy version; master would not apply.
-	ref_arg=$(wget -qO- "$proxy_url/CADDY_VERSION")
+	ref_arg=$(wget -q $wget_opts -O- "$proxy_url/CADDY_VERSION")
 fi
 
 mkdir -p "$dest"
 dest=$(cd "$dest" && pwd)
 
 # codeload accepts tags and both short and full commit hashes.
-wget -qO- "https://codeload.github.com/caddyserver/caddy/tar.gz/$ref_arg" \
+wget -q $wget_opts -O- "https://codeload.github.com/caddyserver/caddy/tar.gz/$ref_arg" \
 	| tar xz -C "$dest" --strip-components=1
 
 cd "$dest"
 for patch in $patches; do
-	wget -qO- "$proxy_url/$patch" | git apply -
+	if ! wget -q $wget_opts -O- "$proxy_url/$patch" | git apply -; then
+		echo "caddy-src: failed to apply $patch to $ref_arg (the naive patches target $(wget -q $wget_opts -O- "$proxy_url/CADDY_VERSION"))" >&2
+		exit 1
+	fi
 done

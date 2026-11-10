@@ -4,6 +4,13 @@ image declares an `update.github` source. Writes changed images (as
 ``image<TAB>version`` lines) to ``.changes`` and ``changed=<n>`` to
 ``$GITHUB_OUTPUT``, so the workflow can tag each bumped image.
 
+If an image ships an ``update-check.sh`` hook, it decides whether the new
+version is allowed: the hook receives the upstream tag as its only argument,
+exit 0 permits the bump, and any other exit status (or a timeout/failure to
+run it) skips that image so the current pin is kept. This lets an image veto a
+release its build cannot produce, for example when its patches no longer
+apply.
+
 Reads and writes with PyYAML (YAML round-trip); blank lines/comments are not
 preserved. Called by .github/workflows/update-versions.yml.
 """
@@ -18,6 +25,10 @@ from pathlib import Path
 import yaml
 
 CHANGES_FILE = Path(".changes")
+UPDATE_CHECK = "update-check.sh"
+# The hook may download and patch an upstream source tree; bound it so a
+# stalled fetch cannot wedge the whole update run.
+HOOK_TIMEOUT = 600
 
 
 def latest_release(repo: str) -> str | None:
@@ -32,6 +43,41 @@ def latest_release(repo: str) -> str | None:
     except subprocess.CalledProcessError:
         return None
     return out.stdout.strip() or None
+
+
+def bump_allowed(name: str, tag: str) -> bool:
+    """Ask the image's update-check hook whether ``tag`` may be bumped to.
+
+    Images without a hook are always allowed. A rejecting hook's last output
+    line is reported as the reason.
+    """
+    hook = Path("images") / name / UPDATE_CHECK
+    if not hook.exists():
+        return True
+    if not hook.is_file():
+        # A directory or other non-file named like the hook would make `sh`
+        # exit 0 and silently allow the bump.
+        print(f"::warning::{name}: {UPDATE_CHECK} is not a regular file; skipping")
+        return False
+    try:
+        proc = subprocess.run(
+            ["sh", str(hook), tag],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=HOOK_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        print(f"::warning::{name}: {UPDATE_CHECK} timed out after {HOOK_TIMEOUT}s for {tag}; skipping")
+        return False
+    except OSError as exc:
+        print(f"::warning::{name}: could not run {UPDATE_CHECK} ({exc}); skipping")
+        return False
+    if proc.returncode != 0:
+        lines = (proc.stderr or proc.stdout or "").strip().splitlines()
+        print(f"::warning::{name}: {UPDATE_CHECK} rejected {tag}: {lines[-1] if lines else 'hook failed'}")
+        return False
+    return True
 
 
 def main() -> int:
@@ -59,6 +105,10 @@ def main() -> int:
         print(f"{name}: current={cur} latest={latest} (repo={repo}, tag={tag})")
 
         if cur == latest:
+            continue
+
+        if not bump_allowed(name, tag):
+            print(f"::warning::{name}: keeping {cur}")
             continue
 
         # Write the bumped version back.

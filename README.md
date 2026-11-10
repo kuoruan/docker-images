@@ -16,7 +16,7 @@ kept out of the YAML for readability and local testing.
 
 ## Build
 
-Builds are **manually triggered**. Go to **Actions → Build Docker Image →
+Builds are **manually triggered**. Go to **Actions → Build Image →
 Run workflow**, pick an image from the dropdown, optionally pass a concrete
 `version` (defaults to that image's [`image.yml`](./images/caddy/image.yml)),
 and run. The build pushes to `ghcr.io/<owner>/<image>`.
@@ -52,7 +52,23 @@ update:
 
 [`update-versions`](.github/workflows/update-versions.yml) rewrites each
 image's `version:` line to the latest upstream release on a weekly schedule
-(and manually). It only bumps the version; builds stay manual.
+(and manually), then tags the bumped images so their builds run.
+
+An image whose build only works for some upstream releases (for example
+because it applies version-specific patches) can ship an `update-check.sh`
+hook next to its `Dockerfile`. Update Versions runs it with the upstream tag
+as its only argument; exit 0 allows the bump, any non-zero status or timeout
+skips that image and keeps the current pin:
+
+```sh
+#!/bin/sh
+# update-check.sh <upstream-tag> — exit 0 to allow the bump.
+set -eu
+check-patches-apply "$1"   # your check here
+```
+
+That gate logic is covered by [`scripts/test-update-versions.py`](./scripts/test-update-versions.py)
+(`python3 scripts/test-update-versions.py`, no network needed).
 
 ## Notes
 

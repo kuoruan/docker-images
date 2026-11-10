@@ -40,3 +40,4 @@ docker buildx build \
 
 - The build uses `CGO_ENABLED=0` so it cross-compiles to arm64; all Go dependencies must be pure-Go.
 - The Caddy source ref is pinned by the `BUILD_VERSION` build arg (`v2.11.4`, or a commit hash); the base images are pinned separately by `BASE_VERSION`.
+- The build applies patches from the `forwardproxy` `naive` branch, which only target the Caddy release they were written for. [`update-check.sh`](./update-check.sh) applies them to a throwaway checkout before a weekly version bump is allowed, so an incompatible upstream release keeps the current pin instead of breaking the build.
