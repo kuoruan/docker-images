@@ -34,6 +34,7 @@ RUN GOARCH=$TARGETARCH xcaddy build "${BUILD_VERSION}" \
       --with github.com/imgk/caddy-trojan \
       --with github.com/caddyserver/forwardproxy@caddy2=github.com/klzgrad/forwardproxy@naive \
       --with github.com/relvacode/caddy-oidc \
+      --with github.com/kuoruan/caddy-forwarded-host \
       --output /usr/bin/caddy
 
 FROM caddy:${BASE_VERSION}-alpine
